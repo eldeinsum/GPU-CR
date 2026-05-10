@@ -160,15 +160,15 @@ fn restore_backend(backend: &mut Backend) -> Result<()> {
             "checkpoint metadata contains too many files: {file_num}"
         )));
     }
+    let storage_len = checkpoint_storage_len(backend.fs().tot_size)?;
 
     for idx in 0..file_num {
         let file = backend.fs().files[idx];
+        let (offset, size) = checkpoint_file_range(idx, file.offset, file.size, storage_len)?;
         let ptr = file.ptr as usize;
         cuda::remap_physical(ptr)?;
 
         let mut copied = 0usize;
-        let size = file.size as usize;
-        let offset = file.offset as usize;
         while copied < size {
             let chunk = min(STAGING_BUF_SIZE, size - copied);
             unsafe {
@@ -186,6 +186,44 @@ fn restore_backend(backend: &mut Backend) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn checkpoint_storage_len(tot_size: u64) -> Result<usize> {
+    let len = usize::try_from(tot_size).map_err(|_| {
+        Error::Protocol(format!(
+            "checkpoint metadata total size is too large: {tot_size} bytes"
+        ))
+    })?;
+    if len > SHM_SIZE {
+        return Err(Error::Protocol(format!(
+            "checkpoint metadata total size exceeds storage: {len} > {SHM_SIZE}"
+        )));
+    }
+    Ok(len)
+}
+
+fn checkpoint_file_range(
+    idx: usize,
+    offset: u64,
+    size: u64,
+    storage_len: usize,
+) -> Result<(usize, usize)> {
+    let offset = usize::try_from(offset).map_err(|_| {
+        Error::Protocol(format!(
+            "checkpoint metadata offset is too large for file {idx}: {offset}"
+        ))
+    })?;
+    let size = usize::try_from(size).map_err(|_| {
+        Error::Protocol(format!(
+            "checkpoint metadata size is too large for file {idx}: {size}"
+        ))
+    })?;
+    if offset.checked_add(size).is_none_or(|end| end > storage_len) {
+        return Err(Error::Protocol(format!(
+            "checkpoint metadata range is out of bounds for file {idx}: offset {offset}, size {size}, storage {storage_len}"
+        )));
+    }
+    Ok((offset, size))
 }
 
 pub fn run_cuda_checkpoint_toggle(pid: libc::pid_t) -> Result<()> {
@@ -213,5 +251,37 @@ fn cuda_checkpoint_binary() -> PathBuf {
         repo_binary
     } else {
         PathBuf::from("cuda-checkpoint")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_protocol_error(result: Result<impl Sized>) {
+        assert!(matches!(result, Err(Error::Protocol(_))));
+    }
+
+    #[test]
+    fn accepts_checkpoint_range_inside_declared_storage() {
+        assert_eq!(
+            checkpoint_file_range(0, 128, 256, 1024).unwrap(),
+            (128, 256)
+        );
+    }
+
+    #[test]
+    fn rejects_checkpoint_range_that_exceeds_declared_storage() {
+        assert_protocol_error(checkpoint_file_range(0, 900, 200, 1024));
+    }
+
+    #[test]
+    fn rejects_checkpoint_range_overflow() {
+        assert_protocol_error(checkpoint_file_range(0, u64::MAX, 2, SHM_SIZE));
+    }
+
+    #[test]
+    fn rejects_checkpoint_storage_larger_than_mapping() {
+        assert_protocol_error(checkpoint_storage_len((SHM_SIZE as u64) + 1));
     }
 }
