@@ -264,7 +264,7 @@ fn ensure_context_locked(state: &mut CudaState) -> Result<()> {
 /// safety contract of CUDA's `cudaMalloc`.
 pub unsafe fn vmm_alloc(dev_ptr: *mut *mut c_void, size: usize) -> CudaError {
     if dev_ptr.is_null() {
-        return CUDA_ERROR_MEMORY_ALLOCATION;
+        return CUDA_ERROR_INVALID_VALUE;
     }
     if size == 0 {
         *dev_ptr = std::ptr::null_mut();
@@ -512,5 +512,16 @@ impl Drop for Stream {
                 let _ = cudart_stream_destroy(self.raw);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vmm_alloc_rejects_null_output_pointer() {
+        let result = unsafe { vmm_alloc(std::ptr::null_mut(), 1) };
+        assert_eq!(result, CUDA_ERROR_INVALID_VALUE);
     }
 }
