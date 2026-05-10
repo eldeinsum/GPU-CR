@@ -1,0 +1,14 @@
+[workspace]
+members = [
+    "crates/gpucr",
+    "crates/gpucr-cli",
+    "crates/gpucr-preload",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+libc = "0.2"

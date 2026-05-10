@@ -1,0 +1,13 @@
+[package]
+name = "gpucr-preload"
+version.workspace = true
+edition.workspace = true
+build = "build.rs"
+
+[lib]
+name = "gpucr_preload"
+crate-type = ["cdylib"]
+
+[dependencies]
+gpucr = { path = "../gpucr" }
+libc.workspace = true

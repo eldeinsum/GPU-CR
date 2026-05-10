@@ -1,0 +1,12 @@
+[package]
+name = "gpucr-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "gpucr-client"
+path = "src/main.rs"
+
+[dependencies]
+gpucr = { path = "../gpucr" }
+libc.workspace = true

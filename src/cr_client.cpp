@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     Comm *comm = new ShareMemComm(pid);
     comm->setup();
 
-    int ret;
+    int ret = 0;
 
     if(init) {
         comm->send_msg(INIT_MSG);
