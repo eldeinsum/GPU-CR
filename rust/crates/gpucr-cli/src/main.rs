@@ -164,7 +164,7 @@ fn init(pid: libc::pid_t, path: &str) -> Result<()> {
     comm.controls_mut().set_checkpoint_path(path);
     comm.send_msg(INIT_MSG);
     signal(pid, signals::cr_init())?;
-    comm.wait_for_finish();
+    comm.wait_for_finish()?;
     Ok(())
 }
 
@@ -175,7 +175,7 @@ fn checkpoint(pid: libc::pid_t, path: &str, buffer_only: bool, init_first: bool)
     let comm = Comm::for_pid(pid)?;
     comm.send_msg(CKPT_MSG);
     signal(pid, signals::cr_checkpoint())?;
-    comm.wait_for_finish();
+    comm.wait_for_finish()?;
 
     if !buffer_only {
         run_cuda_checkpoint_toggle(pid)?;
@@ -190,7 +190,7 @@ fn restore(pid: libc::pid_t, buffer_only: bool) -> Result<()> {
     }
     comm.send_msg(RESTORE_MSG);
     signal(pid, signals::cr_restore())?;
-    comm.wait_for_finish();
+    comm.wait_for_finish()?;
     Ok(())
 }
 

@@ -36,6 +36,7 @@ impl SharedMemFs {
 #[repr(C)]
 pub struct SignalControls {
     pub msg: libc::c_int,
+    pub status: libc::c_int,
     pub restore_path: [u8; 256],
     pub checkpoint_path: [u8; 256],
 }

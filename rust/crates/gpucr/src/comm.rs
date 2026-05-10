@@ -5,7 +5,7 @@ use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::constants::{CONTROL_FILE_PREFIX, CONTROL_PATH, FINISH_MSG, HUGE_PAGE_SIZE};
 use crate::layout::SignalControls;
@@ -63,17 +63,43 @@ impl Comm {
 
     pub fn send_msg(&self, msg: i32) {
         unsafe {
+            std::ptr::write_volatile(&mut (*self.ptr).status, 0);
             std::ptr::write_volatile(&mut (*self.ptr).msg, msg);
         }
     }
 
     pub fn send_finish(&self) {
-        self.send_msg(FINISH_MSG);
+        self.send_finish_status(0);
     }
 
-    pub fn wait_for_finish(&self) {
+    pub fn send_error(&self) {
+        self.send_finish_status(1);
+    }
+
+    fn send_finish_status(&self, status: i32) {
+        unsafe {
+            std::ptr::write_volatile(&mut (*self.ptr).status, status);
+            std::ptr::write_volatile(&mut (*self.ptr).msg, FINISH_MSG);
+        }
+    }
+
+    pub fn wait_for_finish(&self) -> Result<()> {
+        let start = Instant::now();
         while self.recv_msg() != FINISH_MSG {
+            if start.elapsed() > Duration::from_secs(600) {
+                return Err(Error::Protocol(
+                    "timed out waiting for target checkpoint control response".to_string(),
+                ));
+            }
             thread::sleep(Duration::from_millis(10));
+        }
+        let status = unsafe { std::ptr::read_volatile(&(*self.ptr).status) };
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(Error::Protocol(
+                "target reported checkpoint control failure".to_string(),
+            ))
         }
     }
 }

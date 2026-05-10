@@ -28,26 +28,20 @@ impl Runtime {
 
     pub fn handle_control_message(&mut self) -> Result<()> {
         let msg = self.comm.recv_msg();
-        match msg {
-            INIT_MSG => {
-                self.init_checkpoint()?;
-                self.comm.send_finish();
-                Ok(())
-            }
-            CKPT_MSG => {
-                self.checkpoint()?;
-                self.comm.send_finish();
-                Ok(())
-            }
-            RESTORE_MSG => {
-                self.restore()?;
-                self.comm.send_finish();
-                Ok(())
-            }
+        let result = match msg {
+            INIT_MSG => self.init_checkpoint(),
+            CKPT_MSG => self.checkpoint(),
+            RESTORE_MSG => self.restore(),
             other => Err(Error::Protocol(format!(
                 "unexpected control message {other}"
             ))),
+        };
+        if result.is_ok() {
+            self.comm.send_finish();
+        } else {
+            self.comm.send_error();
         }
+        result
     }
 
     fn init_checkpoint(&mut self) -> Result<()> {
