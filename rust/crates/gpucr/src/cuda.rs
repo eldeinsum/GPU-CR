@@ -266,6 +266,10 @@ pub unsafe fn vmm_alloc(dev_ptr: *mut *mut c_void, size: usize) -> CudaError {
     if dev_ptr.is_null() {
         return CUDA_ERROR_MEMORY_ALLOCATION;
     }
+    if size == 0 {
+        *dev_ptr = std::ptr::null_mut();
+        return CUDA_SUCCESS_RT;
+    }
     match vmm_alloc_result(size) {
         Ok(ptr) => {
             *dev_ptr = ptr as *mut c_void;
