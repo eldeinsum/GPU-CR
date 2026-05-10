@@ -130,7 +130,12 @@ fn handle_signal() -> gpucr::Result<()> {
     if guard.is_none() {
         *guard = Some(Runtime::new(pid)?);
     }
-    guard.as_mut().unwrap().handle_control_message()
+    let Some(runtime) = guard.as_mut() else {
+        return Err(gpucr::Error::Protocol(
+            "runtime failed to initialize".to_string(),
+        ));
+    };
+    runtime.handle_control_message()
 }
 
 #[no_mangle]

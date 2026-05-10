@@ -49,11 +49,15 @@ fn run() -> Result<()> {
 
 fn parse_args() -> Result<Command> {
     let args: Vec<String> = env::args().collect();
+    parse_args_from(&args)
+}
+
+fn parse_args_from(args: &[String]) -> Result<Command> {
     if args.len() < 3 {
         return usage_error(&args[0]);
     }
     if args[1].starts_with('-') {
-        return parse_legacy_args(&args);
+        return parse_legacy_args(args);
     }
     let command = args[1].as_str();
     let pid = args[2]
@@ -61,6 +65,9 @@ fn parse_args() -> Result<Command> {
         .map_err(|err| Error::Protocol(format!("invalid pid '{}': {err}", args[2])))?;
     match command {
         "init" => {
+            if args.len() > 4 {
+                return usage_error(&args[0]);
+            }
             let path = args
                 .get(3)
                 .cloned()
@@ -68,6 +75,9 @@ fn parse_args() -> Result<Command> {
             Ok(Command::Init { pid, path })
         }
         "checkpoint" | "ckpt" => {
+            if args.len() > 4 {
+                return usage_error(&args[0]);
+            }
             let path = args
                 .get(3)
                 .cloned()
@@ -79,10 +89,15 @@ fn parse_args() -> Result<Command> {
                 init_first: true,
             })
         }
-        "restore" => Ok(Command::Restore {
-            pid,
-            buffer_only: false,
-        }),
+        "restore" => {
+            if args.len() > 3 {
+                return usage_error(&args[0]);
+            }
+            Ok(Command::Restore {
+                pid,
+                buffer_only: false,
+            })
+        }
         _ => usage_error(&args[0]),
     }
 }
@@ -163,7 +178,7 @@ fn usage_error(binary: &str) -> Result<Command> {
 fn init(pid: libc::pid_t, path: &str) -> Result<()> {
     validate_control_path(path)?;
     let mut comm = Comm::for_pid(pid)?;
-    comm.controls_mut().set_checkpoint_path(path);
+    comm.controls_mut().set_checkpoint_path(path)?;
     comm.send_msg(INIT_MSG);
     signal(pid, signals::cr_init())?;
     comm.wait_for_finish()?;
@@ -230,5 +245,16 @@ mod tests {
     fn accepts_max_length_control_path() {
         let path = "x".repeat(CONTROL_PATH_MAX_LEN);
         assert!(validate_control_path(&path).is_ok());
+    }
+
+    #[test]
+    fn rejects_extra_modern_args() {
+        let args = vec![
+            "gpucr-client".to_string(),
+            "restore".to_string(),
+            "123".to_string(),
+            "extra".to_string(),
+        ];
+        assert!(parse_args_from(&args).is_err());
     }
 }

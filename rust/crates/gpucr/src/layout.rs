@@ -1,4 +1,5 @@
 use crate::constants::MAX_FILE_NUM;
+use crate::{Error, Result};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -53,12 +54,12 @@ impl SignalControls {
         nul_terminated(&self.restore_path)
     }
 
-    pub fn set_checkpoint_path(&mut self, path: &str) {
-        set_buf(&mut self.checkpoint_path, path);
+    pub fn set_checkpoint_path(&mut self, path: &str) -> Result<()> {
+        set_buf(&mut self.checkpoint_path, path)
     }
 
-    pub fn set_restore_path(&mut self, path: &str) {
-        set_buf(&mut self.restore_path, path);
+    pub fn set_restore_path(&mut self, path: &str) -> Result<()> {
+        set_buf(&mut self.restore_path, path)
     }
 }
 
@@ -67,9 +68,16 @@ fn nul_terminated(buf: &[u8]) -> String {
     String::from_utf8_lossy(&buf[..len]).into_owned()
 }
 
-fn set_buf(buf: &mut [u8], value: &str) {
-    assert!(value.len() < buf.len(), "control path is too long");
+fn set_buf(buf: &mut [u8], value: &str) -> Result<()> {
+    if value.len() >= buf.len() {
+        return Err(Error::Protocol(format!(
+            "control path is too long: {} bytes, maximum is {}",
+            value.len(),
+            buf.len() - 1
+        )));
+    }
     buf.fill(0);
     let bytes = value.as_bytes();
     buf[..bytes.len()].copy_from_slice(bytes);
+    Ok(())
 }

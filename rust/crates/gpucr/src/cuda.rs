@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int, c_uint, c_ulonglong, c_void};
 use std::sync::{Mutex, OnceLock};
 
-use crate::constants::round_up_2mb;
+use crate::constants::TWO_MB;
 use crate::{Error, Result};
 
 type CUresult = c_int;
@@ -283,7 +283,7 @@ pub unsafe fn vmm_alloc(dev_ptr: *mut *mut c_void, size: usize) -> CudaError {
 }
 
 fn vmm_alloc_result(size: usize) -> Result<usize> {
-    let aligned_size = round_up_2mb(size);
+    let aligned_size = checked_round_up_2mb(size)?;
     let mut guard = state()
         .lock()
         .map_err(|_| Error::Protocol("cuda state mutex poisoned".to_string()))?;
@@ -341,21 +341,25 @@ fn vmm_free_result(ptr: usize) -> Result<()> {
     let mut guard = state()
         .lock()
         .map_err(|_| Error::Protocol("cuda state mutex poisoned".to_string()))?;
-    let Some(allocation) = guard.allocations.remove(&ptr) else {
-        return Err(Error::Protocol(format!(
-            "cannot free untracked allocation {ptr:#x}"
-        )));
-    };
-    unsafe {
-        if let Some(handle) = allocation.handle {
-            check_driver(cuMemUnmap(ptr as CUdeviceptr, allocation.aligned_size))?;
-            check_driver(cuMemRelease(handle))?;
+    {
+        let Some(allocation) = guard.allocations.get_mut(&ptr) else {
+            return Err(Error::Protocol(format!(
+                "cannot free untracked allocation {ptr:#x}"
+            )));
+        };
+        unsafe {
+            if let Some(handle) = allocation.handle {
+                check_driver(cuMemUnmap(ptr as CUdeviceptr, allocation.aligned_size))?;
+                allocation.handle = None;
+                check_driver(cuMemRelease(handle))?;
+            }
+            check_driver(cuMemAddressFree(
+                ptr as CUdeviceptr,
+                allocation.aligned_size,
+            ))?;
         }
-        check_driver(cuMemAddressFree(
-            ptr as CUdeviceptr,
-            allocation.aligned_size,
-        ))?;
     }
+    guard.allocations.remove(&ptr);
     Ok(())
 }
 
@@ -387,14 +391,21 @@ pub fn release_physical(ptr: usize) -> Result<()> {
             "cannot release unknown allocation {ptr:#x}"
         )));
     };
-    let Some(handle) = allocation.handle.take() else {
+    let Some(handle) = allocation.handle else {
         return Ok(());
     };
     unsafe {
         check_driver(cuMemUnmap(ptr as CUdeviceptr, allocation.aligned_size))?;
+        allocation.handle = None;
         check_driver(cuMemRelease(handle))?;
     }
     Ok(())
+}
+
+fn checked_round_up_2mb(size: usize) -> Result<usize> {
+    size.checked_add(TWO_MB - 1)
+        .map(|rounded| rounded & !(TWO_MB - 1))
+        .ok_or_else(|| Error::Protocol(format!("allocation size is too large: {size} bytes")))
 }
 
 pub fn remap_physical(ptr: usize) -> Result<()> {
