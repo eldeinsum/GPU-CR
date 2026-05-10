@@ -94,7 +94,7 @@ make -j$(nproc)
 ```
 This generates `vGPU-AMD.so` and `cr_client`.
 
-### Option 3: Build the NVIDIA Runtime
+### Option 3: Build the Rust NVIDIA Runtime
 
 ```bash
 cmake -S . -B build-nvidia -DGPU_VENDOR=NVIDIA -DGPUCR_BUILD_CPP=OFF -DGPUCR_BUILD_RUST=ON -DGPUCR_RUST_RELEASE=ON
@@ -145,7 +145,7 @@ Launch the target application (e.g., a Python script using PyTorch/vLLM or a C++
 LD_PRELOAD=/path/to/build/vGPU-NVIDIA.so python3 ./apps/vllm/serving_vllm_nvidia.py
 ```
 
-**(1a) Example (NVIDIA Runtime):**
+**(1a) Example (Rust NVIDIA Runtime):**
 ```bash
 LD_PRELOAD=/path/to/build-nvidia/gpucr-nvidia.so python3 ./apps/vllm/serving_vllm_nvidia.py
 ```
