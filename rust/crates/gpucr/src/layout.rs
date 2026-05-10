@@ -33,12 +33,15 @@ impl SharedMemFs {
     }
 }
 
+pub const CONTROL_PATH_CAPACITY: usize = 256;
+pub const CONTROL_PATH_MAX_LEN: usize = CONTROL_PATH_CAPACITY - 1;
+
 #[repr(C)]
 pub struct SignalControls {
     pub msg: libc::c_int,
     pub status: libc::c_int,
-    pub restore_path: [u8; 256],
-    pub checkpoint_path: [u8; 256],
+    pub restore_path: [u8; CONTROL_PATH_CAPACITY],
+    pub checkpoint_path: [u8; CONTROL_PATH_CAPACITY],
 }
 
 impl SignalControls {
@@ -65,8 +68,8 @@ fn nul_terminated(buf: &[u8]) -> String {
 }
 
 fn set_buf(buf: &mut [u8], value: &str) {
+    assert!(value.len() < buf.len(), "control path is too long");
     buf.fill(0);
     let bytes = value.as_bytes();
-    let len = bytes.len().min(buf.len().saturating_sub(1));
-    buf[..len].copy_from_slice(&bytes[..len]);
+    buf[..bytes.len()].copy_from_slice(bytes);
 }

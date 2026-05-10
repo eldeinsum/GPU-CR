@@ -5,6 +5,7 @@ use gpucr::backend::{default_checkpoint_path_for_pid, ensure_checkpoint_dir};
 use gpucr::comm::Comm;
 use gpucr::constants::signals;
 use gpucr::constants::{CKPT_MSG, INIT_MSG, RESTORE_MSG};
+use gpucr::layout::CONTROL_PATH_MAX_LEN;
 use gpucr::runtime::run_cuda_checkpoint_toggle;
 use gpucr::{Error, Result};
 
@@ -160,12 +161,24 @@ fn usage_error(binary: &str) -> Result<Command> {
 }
 
 fn init(pid: libc::pid_t, path: &str) -> Result<()> {
+    validate_control_path(path)?;
     let mut comm = Comm::for_pid(pid)?;
     comm.controls_mut().set_checkpoint_path(path);
     comm.send_msg(INIT_MSG);
     signal(pid, signals::cr_init())?;
     comm.wait_for_finish()?;
     Ok(())
+}
+
+fn validate_control_path(path: &str) -> Result<()> {
+    if path.len() <= CONTROL_PATH_MAX_LEN {
+        Ok(())
+    } else {
+        Err(Error::Protocol(format!(
+            "checkpoint path is too long: {} bytes, maximum is {CONTROL_PATH_MAX_LEN}",
+            path.len()
+        )))
+    }
 }
 
 fn checkpoint(pid: libc::pid_t, path: &str, buffer_only: bool, init_first: bool) -> Result<()> {
@@ -200,5 +213,22 @@ fn signal(pid: libc::pid_t, signal: i32) -> Result<()> {
         Ok(())
     } else {
         Err(Error::Io(std::io::Error::last_os_error()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_control_paths_that_do_not_fit() {
+        let path = "x".repeat(CONTROL_PATH_MAX_LEN + 1);
+        assert!(validate_control_path(&path).is_err());
+    }
+
+    #[test]
+    fn accepts_max_length_control_path() {
+        let path = "x".repeat(CONTROL_PATH_MAX_LEN);
+        assert!(validate_control_path(&path).is_ok());
     }
 }
