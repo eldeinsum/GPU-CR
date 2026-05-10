@@ -101,7 +101,7 @@ impl NvidiaController {
 fn checkpoint_backend(backend: &mut Backend) -> Result<()> {
     cuda::device_synchronize()?;
     backend.fs_mut().clear();
-    let snapshot = cuda::memory_snapshot();
+    let snapshot = cuda::memory_snapshot()?;
     if snapshot.len() > MAX_FILE_NUM {
         return Err(Error::Protocol(format!(
             "too many GPU allocations: {} > {MAX_FILE_NUM}",

@@ -363,23 +363,20 @@ fn vmm_free_result(ptr: usize) -> Result<()> {
     Ok(())
 }
 
-pub fn memory_snapshot() -> Vec<AllocationSnapshot> {
-    let mut snapshot: Vec<_> = state()
+pub fn memory_snapshot() -> Result<Vec<AllocationSnapshot>> {
+    let guard = state()
         .lock()
-        .ok()
-        .map(|guard| {
-            guard
-                .allocations
-                .iter()
-                .map(|(ptr, allocation)| AllocationSnapshot {
-                    ptr: *ptr,
-                    size: allocation.size,
-                })
-                .collect()
+        .map_err(|_| Error::Protocol("cuda state mutex poisoned".to_string()))?;
+    let mut snapshot: Vec<_> = guard
+        .allocations
+        .iter()
+        .map(|(ptr, allocation)| AllocationSnapshot {
+            ptr: *ptr,
+            size: allocation.size,
         })
-        .unwrap_or_default();
+        .collect();
     snapshot.sort_by_key(|allocation| allocation.ptr);
-    snapshot
+    Ok(snapshot)
 }
 
 pub fn release_physical(ptr: usize) -> Result<()> {
