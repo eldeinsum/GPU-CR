@@ -1,6 +1,11 @@
 # NVIDIA Runtime
 
-GPU-CR includes a Rust NVIDIA runtime alongside the original C++ implementation. It preserves the existing LD_PRELOAD and client workflow while using Rust for the control plane, CUDA VMM allocation tracking, checkpoint storage, and restore logic.
+GPU-CR includes a Rust NVIDIA runtime alongside the original C++ implementation. It uses the same `LD_PRELOAD` workflow and a separate client binary.
+
+Runtime names:
+
+- C++ NVIDIA: `vGPU-NVIDIA.so` with `cr_client`
+- Rust NVIDIA: `gpucr-nvidia.so` with `gpucr-client`
 
 ## Build
 

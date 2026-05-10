@@ -17,8 +17,8 @@ GPU-CR is a system designed to support efficient Checkpoint and Restore (C/R) fo
 ## I. Features
 
 - **Cross-Vendor Support**: Experimental support for both NVIDIA and AMD GPUs.
-- **Transparent C/R**: Uses `LD_PRELOAD` to inject a `vGPU` library that intercepts memory allocations and resource management.
-- **Client CLI**: Simple command-line interface (`cr_client`) to trigger checkpoint and restore operations.
+- **Transparent C/R**: Uses `LD_PRELOAD` to inject a GPU runtime library.
+- **Client CLI**: Command-line tools trigger checkpoint and restore operations.
 - **Performance Optimization**: Support for Huge Pages to accelerate memory saving.
 
 ## II. TODO
@@ -73,9 +73,9 @@ Total latency = Data + Control
 
 ## V. Building
 
-This project utilizes CMake for building. **Please choose ONE of the following build options based on your target GPU vendor.** Do not build both simultaneously in the same environment.
+This project utilizes CMake for building. **Please choose ONE of the following build options based on your target GPU vendor and runtime.**
 
-### Option 1: Build for NVIDIA (CUDA)
+### Option 1: Build for NVIDIA (CUDA, C++)
 ```Bash
 mkdir build && cd build
 export GPU_VENDOR=NVIDIA
@@ -94,7 +94,7 @@ make -j$(nproc)
 ```
 This generates `vGPU-AMD.so` and `cr_client`.
 
-### Option 3: Build the Rust NVIDIA Runtime
+### Option 3: Build for NVIDIA (CUDA, Rust)
 
 ```bash
 cmake -S . -B build-nvidia -DGPU_VENDOR=NVIDIA -DGPUCR_BUILD_CPP=OFF -DGPUCR_BUILD_RUST=ON -DGPUCR_RUST_RELEASE=ON
@@ -140,12 +140,12 @@ export AMD_CKPT_DIR=/path/to/save/criu_files
 
 Launch the target application (e.g., a Python script using PyTorch/vLLM or a C++ binary) using `LD_PRELOAD`.
 
-**(1) Example (NVIDIA):**
+**(1) Example (NVIDIA, C++):**
 ```bash
 LD_PRELOAD=/path/to/build/vGPU-NVIDIA.so python3 ./apps/vllm/serving_vllm_nvidia.py
 ```
 
-**(1a) Example (Rust NVIDIA Runtime):**
+**(1a) Example (NVIDIA, Rust):**
 ```bash
 LD_PRELOAD=/path/to/build-nvidia/gpucr-nvidia.so python3 ./apps/vllm/serving_vllm_nvidia.py
 ```
@@ -157,9 +157,13 @@ LD_PRELOAD=/path/to/build/vGPU-AMD.so ./apps/vllm/serving_vllm_amd.sh
 
 ### 3. Checkpointing
 
-Use the `cr_client` tool to trigger a checkpoint.
+Use the matching client to trigger a checkpoint.
 
 ```bash
+# NVIDIA, Rust
+./gpucr-client checkpoint <TARGET_PID>
+
+# NVIDIA C++ / AMD
 # -i: initialization mode
 # -c: Checkpoint mode
 # -p: Target PID
@@ -174,6 +178,10 @@ Use the `cr_client` tool to trigger a checkpoint.
 Restore the process from the checkpoints.
 
 ```bash
+# NVIDIA, Rust
+./gpucr-client restore <TARGET_PID>
+
+# NVIDIA C++ / AMD
 # -r: Restore mode
 # -p: Target PID (the original PID)
 ./cr_client -r -p <TARGET_PID>
@@ -185,6 +193,7 @@ Restore the process from the checkpoints.
   - `GPUs/NVIDIA/`: NVIDIA-specific implementation (CUDA hooks).
   - `GPUs/AMD/`: AMD-specific implementation (HIP hooks).
   - `cr_client.cpp`: Control client implementation.
+- `rust/`: Rust NVIDIA runtime and `gpucr-client`.
 - `apps/`: Example scripts and applications (e.g., vLLM examples).
 
 ## VIII. Attribution
